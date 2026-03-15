@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Dozer Clicker - Legacy Reborn</title>
+    <style>
+        body { 
+            background: #c0392b url('https://www.transparenttextures.com/patterns/brick-wall.png');
+            color: white; text-align: center; font-family: sans-serif; margin: 0; padding: 0; height: 100vh; overflow: hidden; touch-action: none; -webkit-user-select: none;
+        }
+        .header { height: 190px; background: rgba(0,0,0,0.92); border-bottom: 3px solid #ff80ab; position: relative; z-index: 100; }
+        #game-logo { height: 40px; margin: 5px auto; display: block; filter: drop-shadow(0 0 8px gold); }
+        .score { font-size: 36px; font-weight: bold; color: #ff80ab; text-shadow: 0 0 10px #ff4081; margin: 0; }
+        #stage { position: relative; height: calc(100vh - 190px); width: 100%; }
+        #dozer-zone { height: 35%; display: flex; align-items: center; justify-content: center; }
+        
+        /* フィーバー虹色アニメーション */
+        @keyframes rainbow-anim {
+            0% { filter: hue-rotate(0deg) brightness(1.2) drop-shadow(0 0 15px gold); }
+            50% { filter: hue-rotate(180deg) brightness(1.5) drop-shadow(0 0 25px white); }
+            100% { filter: hue-rotate(360deg) brightness(1.2) drop-shadow(0 0 15px gold); }
+        }
+        .fever-rainbow { animation: rainbow-anim 0.5s linear infinite !important; }
+        .rainbow-effect { animation: rainbow-anim 3s linear infinite; }
+        
+        #box { width: 140px; height: 140px; background-size: contain; background-repeat: no-repeat; background-position: bottom; cursor: pointer; transition: transform 0.05s; transform-origin: bottom center; z-index: 50; }
+        #walker-layer { position: absolute; top: 35%; bottom: 0; left: 0; right: 0; pointer-events: none; }
+        .walker { position: absolute; pointer-events: auto; transform-origin: bottom center; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; z-index: 10; }
+        .walker-body { width: 100%; height: 100%; background-size: contain; background-repeat: no-repeat; background-position: center; }
+        .walker-body.twins { width: 60%; height: 100%; display: inline-block; margin: 0 -5%; }
+        
+        /* バインドどーざー専用色（鎖なし） */
+        .bind-color { background-color: #5d3a1a !important; background-blend-mode: multiply !important; filter: contrast(1.1) brightness(0.9); }
+
+        .side-btn { position: fixed; right: 20px; width: 65px; height: 65px; border-radius: 50%; border: 3px solid white; display: none; align-items: center; justify-content: center; z-index: 1000; font-weight: bold; font-size: 11px; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
+        .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 2000; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; }
+        .window { width: 90%; max-width: 320px; background: #1a1a1a; border: 3px solid #ff80ab; border-radius: 20px; padding: 15px; display: flex; flex-direction: column; gap: 8px; max-height: 80vh; overflow-y: auto; }
+        .btn { padding: 10px; border-radius: 12px; border: none; font-weight: bold; color: white; cursor: pointer; font-size: 13px; width: 100%; transition: background 0.2s; }
+        .btn:disabled { background: #444 !important; color: #888; cursor: not-allowed; border: 1px solid #333; }
+        #boost-bar { width: 0%; height: 100%; background: #4caf50; transition: width 0.1s linear; }
+        .effect { position: absolute; pointer-events: none; animation: pop 0.8s forwards; font-size: 24px; z-index: 9999; font-weight: bold; }
+        @keyframes pop { 0% { transform: translate(-50%, -100%) scale(0.5); opacity: 1; } 100% { transform: translate(-50%, -300%) scale(1.5); opacity: 0; } }
+    </style>
+</head>
+<body>
+
+<div id="setup" class="overlay">
+    <h2 style="color:#ff80ab;">どーざークリッカー</h2>
+    <div style="background:rgba(255,255,255,0.1); padding:15px; border-radius:15px; width:100%; max-width:280px; margin-bottom:15px;">
+        <label>1. 通常</label><input type="file" id="i1" accept="image/*"><br><br>
+        <label>2. 撫で</label><input type="file" id="i2" accept="image/*"><br><br>
+        <label>3. なかま</label><input type="file" id="i3" accept="image/*">
+    </div>
+    <button id="start-click-btn" class="btn" style="background:#2ed573;" onclick="masterStart()">ゲーム開始！</button>
+</div>
+
+<div class="header">
+    <img id="game-logo" src="https://raw.githubusercontent.com/sutislime/dozerclicker/refs/heads/main/%E7%84%A1%E9%A1%8C366_20260315012427.png">
+    <div id="rank">称号: 見習いどーざー</div>
+    <div class="score">💖 <span id="love-val">0</span></div>
+    <div style="font-size:11px; color:#ccc;">秒産: <span id="auto-val">0</span> / 知識Lv: <span id="tap-val">1</span></div>
+    <div style="width:180px; height:8px; background:#222; margin:5px auto; border-radius:4px; overflow:hidden;">
+        <div id="boost-bar"></div>
+    </div>
+</div>
+
+<div id="stage">
+    <div id="dozer-zone"><div id="box" style="display:none;"></div></div>
+    <div id="walker-layer"></div>
+</div>
+
+<div id="book-btn" class="side-btn" style="bottom:100px; background:#3498db;">図鑑</div>
+<div id="shop-btn" class="side-btn" style="bottom:30px; background:#ff4757;">SHOP</div>
+
+<div id="shop-ui" class="overlay" style="display:none;">
+    <div class="window">
+        <div style="color:gold; font-weight:bold;">🛒 SHOP</div>
+        <button class="btn" id="buy-dozer" style="background:#ff4757;">なかま購入 (10)</button>
+        <button class="btn" id="upgrade-tap" style="background:#2ed573;">知識を深める (100)</button>
+        <button class="btn" id="upgrade-train" style="background:#e67e22;">特訓 (200)</button>
+        <button class="btn" id="upgrade-mag" style="background:#1abc9c;">ゴールデンスナップ (2000)</button>
+        <button class="btn" id="buy-kookoo" style="background:#3498db;">Kookooを雇う (5000)</button>
+        <button class="btn" id="buy-litany" style="background:#9b59b6;">Litanyを雇う (9999)</button>
+        <div id="fuse-container" style="display: flex; flex-direction: column; gap: 5px;"></div>
+        <button class="btn" style="background:#555;" onclick="closeUI('shop-ui')">閉じる</button>
+    </div>
+</div>
+
+<div id="book-ui" class="overlay" style="display:none;">
+    <div class="window">
+        <div style="color:#00e5ff; font-weight:bold;">📘 どーざー図鑑</div>
+        <div id="book-list"></div>
+        <button class="btn" style="background:#555;" onclick="closeUI('book-ui')">閉じる</button>
+    </div>
+</div>
+
+<script>
+    let love = 0, tapLvl = 1, costD = 10, costT = 100, costTr = 200, costM = 2000;
+    let img1 = "", img2 = "", img3 = "", isGame = false, isDown = false, hasK = false, hasL = false;
+    let nade = 0, fever = 0, cooldown = 0, goldTime = 0, trainP = 0, col = [];
+    let lastActive = Date.now(), isSleeping = false, goldenLevel = 0;
+
+    const tickSnd = new Audio('https://github.com/sutislime/dozerclicker/raw/refs/heads/main/DozerTick.wav');
+    const feverBGM = new Audio('https://github.com/sutislime/dozerclicker/raw/refs/heads/main/screen-20260315-122034-1773544813220%20(1).mp3');
+    feverBGM.loop = true;
+
+    function handleImg(id) {
+        document.getElementById(id).onchange = (e) => {
+            const f = e.target.files[0]; if(!f) return;
+            const r = new FileReader();
+            r.onload = (v) => {
+                const u = `url(${v.target.result})`;
+                if(id==='i1') img1=u; if(id==='i2') img2=u; if(id==='i3') img3=u;
+            };
+            r.readAsDataURL(f);
+        };
+    }
+    ['i1','i2','i3'].forEach(handleImg);
+
+    function masterStart() {
+        document.getElementById('setup').style.display='none';
+        document.getElementById('box').style.display='block';
+        document.querySelectorAll('.side-btn').forEach(b => b.style.display='flex');
+        const def = "url('https://via.placeholder.com/150/FF80AB/FFFFFF?text=Dozer')";
+        if(!img1) img1 = def; if(!img2) img2 = img1; if(!img3) img3 = img1;
+        isGame = true;
+        addBook("どーざー", img1, "");
+        try { tickSnd.play().then(()=>tickSnd.pause()).catch(()=>{}); feverBGM.play().then(()=>feverBGM.pause()).catch(()=>{}); } catch(e){}
+        setInterval(logic, 1000);
+        setInterval(() => { if(hasK && isGame) doTap(window.innerWidth/2, window.innerHeight/3, false); }, 500);
+        scheduleGolden();
+        requestAnimationFrame(render);
+    }
+
+    function doTap(x, y, manual) {
+        if(!isGame) return;
+        lastActive = Date.now(); isSleeping = false;
+        love += tapLvl * (fever > 0 ? 4 : 1) * (goldTime > 0 ? 5 : 1);
+        if(manual) {
+            tickSnd.currentTime = 0; tickSnd.play().catch(()=>{});
+            if(fever===0 && cooldown===0) { 
+                nade += 2.5; 
+                if(nade>=100){ nade=0; fever=20; feverBGM.currentTime = 0; feverBGM.play().catch(()=>{}); } 
+            }
+        }
+        pop(x, y, manual ? "💖" : "✨");
+        updateUI();
+    }
+
+    function logic() {
+        if(!isGame) return;
+        let totalAuto = 0;
+        document.querySelectorAll('.walker').forEach(w => totalAuto += (parseFloat(w.dataset.p) + trainP));
+        if(fever > 0) { fever--; if(fever===0) { cooldown=90; feverBGM.pause(); } } 
+        else if(cooldown > 0) cooldown--;
+        if(goldTime > 0) goldTime--;
+        if(Date.now() - lastActive > 10000) isSleeping = true;
+        if(!isSleeping || hasK) love += totalAuto * (fever > 0 ? 4 : 1) * (goldTime > 0 ? 5 : 1);
+        updateUI();
+    }
+
+    function checkFuse() {
+        const container = document.getElementById('fuse-container');
+        container.innerHTML = "";
+        const groups = {};
+        document.querySelectorAll('.walker').forEach(w => {
+            if(['K','L','G'].includes(w.dataset.type) || parseInt(w.dataset.lvl) > 1) return;
+            const key = w.dataset.name;
+            if(!groups[key]) groups[key] = []; groups[key].push(w);
+        });
+        for(let key in groups) {
+            if(groups[key].length >= 3) {
+                const btn = document.createElement('button'); btn.className = "btn"; btn.style.background = "#8e44ad";
+                btn.innerText = `${key}を3体合成 (Lv.1限定)`;
+                btn.onclick = () => {
+                    const base = groups[key][0];
+                    for(let i=0; i<3; i++) groups[key][i].remove();
+                    spawn(base.dataset.type, 2, base.dataset.fC, base.dataset.fS, base.dataset.emoji, base.dataset.name);
+                    pop(window.innerWidth/2, window.innerHeight/2, "✨進化!!✨");
+                    checkFuse();
+                };
+                container.appendChild(btn);
+            }
+        }
+    }
+
+    function updateUI() {
+        document.getElementById('love-val').innerText = Math.floor(love);
+        document.getElementById('tap-val').innerText = tapLvl;
+        document.getElementById('buy-dozer').innerText = `なかま購入 (${Math.floor(costD)})`;
+        document.getElementById('buy-dozer').disabled = love < costD;
+        document.getElementById('upgrade-tap').innerText = `知識を深める (${Math.floor(costT)})`;
+        document.getElementById('upgrade-tap').disabled = love < costT;
+        document.getElementById('upgrade-train').innerText = `特訓 (${Math.floor(costTr)})`;
+        document.getElementById('upgrade-train').disabled = love < costTr;
+        document.getElementById('upgrade-mag').innerText = `Gスナップ Lv.${goldenLevel} (${Math.floor(costM)})`;
+        document.getElementById('upgrade-mag').disabled = love < costM || goldenLevel >= 7;
+
+        const kBtn = document.getElementById('buy-kookoo');
+        kBtn.disabled = hasK || love < 5000; kBtn.innerText = hasK ? "Kookoo雇用済み" : "Kookooを雇う (5000)";
+        const lBtn = document.getElementById('buy-litany');
+        lBtn.disabled = hasL || love < 9999; lBtn.innerText = hasL ? "Litany雇用済み" : "Litanyを雇う (9999)";
+
+        let currentP = 0;
+        document.querySelectorAll('.walker').forEach(w => currentP += (parseFloat(w.dataset.p) + trainP));
+        document.getElementById('auto-val').innerText = Math.floor(currentP * (fever > 0 ? 4 : 1) * (goldTime > 0 ? 5 : 1));
+        
+        const box = document.getElementById('box');
+        if(fever > 0) box.classList.add('fever-rainbow'); else box.classList.remove('fever-rainbow');
+        
+        const bar = document.getElementById('boost-bar');
+        bar.style.width = fever > 0 ? (fever/20*100)+"%" : (cooldown > 0 ? (cooldown/90*100)+"%" : nade+"%");
+        bar.style.background = fever > 0 ? "red" : (cooldown > 0 ? "#555" : "#4caf50");
+    }
+
+    function render() {
+        if(!isGame) return;
+        const box = document.getElementById('box');
+        box.style.backgroundImage = isSleeping ? img1 : (isDown ? img2 : img1);
+        box.style.transform = isSleeping ? "scale(0.95, 0.85)" : (isDown ? "scale(1.3, 0.7)" : "scale(1, 1)");
+        
+        if(isSleeping && Math.random() < 0.05) {
+            const r = box.getBoundingClientRect(); pop(r.left + r.width/2, r.top + 20, "💤");
+        }
+
+        document.querySelectorAll('.walker').forEach(w => {
+            let x = parseFloat(w.dataset.x), d = parseFloat(w.dataset.d), y = parseFloat(w.dataset.y);
+            let canMove = !isSleeping || ['K','L'].includes(w.dataset.type);
+            w.querySelectorAll('.walker-body').forEach(b => {
+                b.style.backgroundImage = (!canMove) ? img1 : (w.dataset.customImg || img3);
+                if(fever > 0) b.classList.add('fever-rainbow'); else b.classList.remove('fever-rainbow');
+            });
+            if(canMove) {
+                x += parseFloat(w.dataset.speed) * (1 + (trainP / 100)) * (fever > 0 ? 2 : 1) * d;
+                if(x > 90 || x < 2) { d *= -1; w.dataset.d = d; }
+                w.dataset.x = x; w.style.left = x + "%";
+                w.style.bottom = (y + Math.abs(Math.sin(Date.now()/300)) * 10) + "px";
+                w.style.transform = `scaleX(${d})`;
+                if(Math.random() < 0.01) { const r = w.getBoundingClientRect(); pop(r.left + r.width/2, r.top, "✨"); }
+            } else if(Math.random() < 0.03) {
+                const r = w.getBoundingClientRect(); pop(r.left + r.width/2, r.top, "💤");
+            }
+        });
+        requestAnimationFrame(render);
+    }
+
+    function spawn(type, lvl=1, fC="", fS="", emoji="", name="なかま", customImg=null) {
+        const w = document.createElement('div'); w.className = 'walker';
+        let baseP = (type==='G'?80 : (type==='R'?40 : 5));
+        w.dataset.p = baseP * Math.pow(2.5, lvl-1);
+        w.dataset.x = Math.random()*80+5; w.dataset.d = 1; w.dataset.y = Math.random()*150;
+        w.dataset.lvl = lvl; w.dataset.type = type; w.dataset.name = name; w.dataset.fC = fC; w.dataset.fS = fS; w.dataset.emoji = emoji;
+        if(customImg) w.dataset.customImg = customImg;
+        w.dataset.speed = (type==='G'?1:(type==='R'?0.7:0.5)) * (lvl>1?0.6:1) * (0.7 + Math.random()*0.6); 
+
+        const s = 60 * (lvl > 1 ? 1.5 : 1);
+        w.style.width = (name === "双子" ? s * 1.5 : s) + "px"; w.style.height = s + "px";
+        const b = document.createElement('div'); b.className = 'walker-body ' + fC; 
+        b.style.backgroundImage = customImg || img3; b.style.filter = fS;
+        if(name === "双子") {
+            const b1 = b.cloneNode(true); b1.className += ' twins'; w.appendChild(b1);
+            const b2 = b.cloneNode(true); b2.className += ' twins'; w.appendChild(b2);
+        } else { w.appendChild(b); }
+        document.getElementById('walker-layer').appendChild(w);
+        addBook(name, customImg || img3, fS, fC);
+        checkFuse();
+    }
+
+    function scheduleGolden() {
+        let interval = Math.max(15000, 120000 - (goldenLevel * 15000));
+        setTimeout(() => { if(isGame) spawnGolden(); scheduleGolden(); }, interval + (Math.random() * 10000));
+    }
+    function spawnGolden() {
+        const g = document.createElement('div');
+        g.style.cssText = "position:absolute; width:100px; height:100px; z-index:500; cursor:pointer; background-size:contain; filter:drop-shadow(0 0 20px gold) sepia(1); background-image:"+img1+"; top:25%; left:-120px;";
+        document.getElementById('stage').appendChild(g);
+        let pos = -120;
+        const anim = setInterval(() => {
+            pos += 5; g.style.left = pos + "px";
+            if(pos > window.innerWidth + 100) { clearInterval(anim); g.remove(); }
+        }, 30);
+        g.onpointerdown = () => { 
+            clearInterval(anim); goldTime = 15; g.remove(); 
+            love += (love * 0.1) + 500;
+            spawn('G', 1, "", "sepia(1) drop-shadow(0 0 10px gold)", "✨", "黄金どーざー");
+            pop(window.innerWidth/2, 100, "GOLDEN TIME!"); updateUI();
+        };
+    }
+
+    document.getElementById('box').onpointerdown = (e) => { isDown = true; doTap(e.clientX, e.clientY, true); };
+    window.onpointerup = () => isDown = false;
+
+    document.getElementById('buy-dozer').onclick = () => {
+        if(love >= costD) {
+            love -= costD; costD *= 1.45;
+            let chance = (hasL ? 0.2 : 0.05) + (goldenLevel * 0.05);
+            const r = [
+                {fC:"", fS:"drop-shadow(0 0 8px gold)", e:"👑", n:"王冠"}, 
+                {fC:"", fS:"hue-rotate(300deg)", e:"🌸", n:"おはな"}, 
+                {fC:"", fS:"", e:"", n:"双子"}, 
+                {fC:"rainbow-effect", fS:"", e:"🌈", n:"レインボー"},
+                {fC:"bind-color", fS:"", e:"", n:"バインド"}
+            ];
+            if(Math.random() < chance) {
+                const sel = r[Math.floor(Math.random()*r.length)];
+                spawn('R', 1, sel.fC, sel.fS, sel.e, sel.n);
+                pop(window.innerWidth/2, window.innerHeight/2, "✨レア!!✨");
+            } else spawn('ふつう');
+            updateUI();
+        }
+    };
+    document.getElementById('upgrade-tap').onclick = () => { if(love >= costT) { love -= costT; tapLvl += 5; costT *= 1.8; updateUI(); } };
+    document.getElementById('upgrade-train').onclick = () => { if(love >= costTr) { love -= costTr; trainP += 10; costTr *= 2.2; updateUI(); } };
+    document.getElementById('upgrade-mag').onclick = () => { if(love >= costM && goldenLevel < 7) { love -= costM; goldenLevel++; costM *= 3; updateUI(); } };
+    document.getElementById('buy-kookoo').onclick = () => { if(love >= 5000 && !hasK) { love -= 5000; hasK = true; spawn('K', 1, "", "", "", "Kookoo", "url('https://raw.githubusercontent.com/sutislime/dozerclicker/refs/heads/main/Transparent_Kookoo%20(1).webp')"); updateUI(); } };
+    document.getElementById('buy-litany').onclick = () => { if(love >= 9999 && !hasL) { love -= 9999; hasL = true; spawn('L', 1, "", "", "", "Litany", "url('https://raw.githubusercontent.com/sutislime/dozerclicker/refs/heads/main/%E7%84%A1%E9%A1%8C366_20260315025518.png')"); updateUI(); } };
+
+    document.getElementById('shop-btn').onclick = () => { updateUI(); checkFuse(); document.getElementById('shop-ui').style.display='flex'; };
+    document.getElementById('book-btn').onclick = () => document.getElementById('book-ui').style.display='flex';
+    function closeUI(id) { document.getElementById(id).style.display='none'; }
+    function addBook(n, img, f, c="") {
+        if(col.includes(n)) return; col.push(n);
+        const i = document.createElement('div'); i.style.cssText="display:flex;align-items:center;background:rgba(255,255,255,0.1);padding:5px;border-radius:10px;margin-bottom:5px;gap:10px;";
+        i.innerHTML = `<div class="walker-body ${c}" style="width:30px;height:30px;background-size:contain;background-repeat:no-repeat;background-image:${img};filter:${f}"></div><span style="font-size:12px;">${n}</span>`;
+        document.getElementById('book-list').appendChild(i);
+    }
+    function pop(x, y, t) {
+        const e = document.createElement('div'); e.className='effect'; e.innerText=t;
+        e.style.left = x + 'px'; e.style.top = y + 'px';
+        document.body.appendChild(e); setTimeout(()=>e.remove(), 800);
+    }
+</script>
+</body>
+</html>
